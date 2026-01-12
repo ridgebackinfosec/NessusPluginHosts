@@ -195,6 +195,11 @@ def main():
         metavar="OUTDIR",
         help="When used with --list-plugins (optional SEVERITY), exports a host list per plugin to OUTDIR/<scan>/<Severity>/PID_[PluginName][-MSF].txt"
     )
+    parser.add_argument(
+        "--count-only",
+        action="store_true",
+        help="Only print the count of matching hosts/services per .nessus file (no host lists). Use with a plugin_id."
+    )
     args = parser.parse_args()
 
     if not args.file and not args.directory:
@@ -206,6 +211,10 @@ def main():
 
     in_list_mode = args.list_plugins is not None
     in_export_mode = args.export_plugin_hosts is not None
+
+    # --count-only only makes sense when searching for a single plugin_id (original host-list mode)
+    if args.count_only and (in_list_mode or in_export_mode):
+        parser.error("--count-only must be used with a specific plugin_id (not with --list-plugins or --export-plugin-hosts).")
 
     if not in_list_mode and not in_export_mode and not args.plugin_id:
         parser.error("Provide a plugin_id, or use --list-plugins, or --export-plugin-hosts with --list-plugins.")
@@ -285,9 +294,17 @@ def main():
     # Original single-plugin host/port results mode
     for file in file_list:
         matches = parse_nessus_file(file, args.plugin_id, args.no_port)
+        count = len(matches)
+
+        if args.count_only:
+            # Print per-file counts. If multiple files or directory provided, include filename.
+            if args.directory or len(file_list) > 1:
+                print(f"{os.path.basename(file)}:{count}")
+            else:
+                print(count)
+            continue
 
         if args.directory:
-            count = len(matches)
             # choose label based on whether ports are included
             label = "nodes" if args.no_port else "nodes/ports"
             print(f"\n===== Results from {os.path.basename(file)} ({count} {label}) =====")
